@@ -1,0 +1,578 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>无标题文档</title>
+<script type="text/javascript">
+/*************************************************c插件定义部分******************************************************/
+var DROP = (function () {
+    var opts = {
+    	container: "",
+    	drag_items: "",
+    	state: "inner" ,
+    	setContainerStyle: true ,
+    	moveInto: function(){},
+    	moveOut: function(){},
+    	endInto: function(){}
+	},//默认参数,全局的  state:inner outer center 标示拖拽对象是碰触目标触发还是完全进入目标再触发
+    curDrag,
+    changeWh,
+    //以下为私有方法
+    getPosition=function(elem){
+        if ( !elem ) return {left:0, top:0};  
+        var top = 0, left = 0;  
+        if ( "getBoundingClientRect" in document.documentElement ){  
+            //jquery方法  
+            var box = elem.getBoundingClientRect(),   
+            doc = elem.ownerDocument,   
+            body = doc.body,   
+            docElem = doc.documentElement,  
+            clientTop = docElem.clientTop || body.clientTop || 0,   
+            clientLeft = docElem.clientLeft || body.clientLeft || 0,  
+            top  = box.top  + (self.pageYOffset || docElem && docElem.scrollTop  || body.scrollTop ) - clientTop,  
+            left = box.left + (self.pageXOffset || docElem && docElem.scrollLeft || body.scrollLeft) - clientLeft;  
+        }else{  
+            do{  
+                top += elem.offsetTop || 0;  
+                left += elem.offsetLeft || 0;  
+                elem = elem.offsetParent;  
+            } while (elem);  
+      }  
+        return {left:left, top:top};      
+    },
+    
+    isJoinToBox=function(curDrag){
+        var extendX,
+            extendY,
+            drag_left = parseInt(curDrag.style.left),
+            drag_top = parseInt(curDrag.style.top),
+            box_position = getPosition(opts.container),
+            box_top = box_position.top,
+            box_left = box_position.left,
+            box_bottom = opts.container.offsetHeight + box_top - curDrag.offsetHeight,
+            box_right = opts.container.offsetWidth + box_left;
+            
+        switch(opts.state)
+        {
+            case "outer":
+                extendX = curDrag.offsetWidth;
+                extendY = curDrag.offsetHeight;                           
+                break;
+            case "inner":
+                extendX=0;
+                extendY=0;
+                break;
+            case "center":
+                extendX = parseInt(curDrag.offsetWidth/2);
+                extendY = parseInt(curDrag.offsetHeight/2);
+                break;
+            default:
+                extendX = curDrag.offsetWidth;
+                extendY = curDrag.offsetHeight;
+                        
+        }
+
+        return ((drag_left >= box_left-extendX && drag_left <= box_right - curDrag.offsetWidth) &&
+                (drag_top >= box_top && drag_top <= box_bottom));
+    },
+    
+    start=function(e){
+        window.getSelection().removeAllRanges();
+        var oldNode = e.target,
+            newNode,
+            top = getPosition(oldNode).top,
+            left = getPosition(oldNode).left;
+            
+        if("true" === oldNode.getAttribute("drag"))
+        {
+            newNode = oldNode.cloneNode(true);
+            newNode.style.cssText = "z-index:1;opacity: 0.5;position:absolute; top:"+top+"px;left:"+left+"px";
+            oldNode.parentNode.appendChild(newNode);
+            curDrag = newNode;
+        }
+    },
+    
+    move=function(e){
+        window.getSelection ? window.getSelection().removeAllRanges():document.selection.empty();
+        if(curDrag){
+            curDrag.style.top = (e.pageY - (curDrag.clientHeight / 2)) + "px";
+            curDrag.style.left = (e.pageX - (curDrag.clientWidth / 2)) + "px";
+            if(opts.setContainerStyle){
+                if(isJoinToBox(curDrag))
+                {
+                	curDrag.style.opacity = 1;
+                    opts.moveInto();
+                }
+                else{
+                	curDrag.style.opacity = 0.5;
+                    opts.moveOut();
+                }
+            }
+        } else if (changeWh) {
+            setCursor(e.srcElement, e.srcElement.style.top.slice(0, -2), e.srcElement.style.left.slice(0, -2), e.clientY, e.clientX);
+        }
+    },
+    
+    end=function(e){
+        window.getSelection ? window.getSelection().removeAllRanges():document.selection.empty();
+        if(curDrag){
+            if(isJoinToBox(curDrag)){
+                var newNode = curDrag.cloneNode(true);
+                opts.endInto(newNode);
+                newNode.addEventListener("mouseover", over, true);
+                newNode.addEventListener("mouseleave", leave, true);   
+            }
+                
+            if(opts.setContainerStyle){
+                opts.moveOut();
+            }
+            curDrag.parentNode.removeChild(curDrag);
+            curDrag = null;
+        }
+    },
+
+    setCursor=function(obj, top, left, x, y) {
+        top = parseInt(top);
+        left = parseInt(left)
+        var height = obj.clientHeight;
+        var width = obj.clientWidth;
+        obj.style.cursor = 'move';
+
+        //落点在 竖 边 
+        if ( Math.abs(left - y) < 5 || Math.abs(left + width - y) < 5) {
+            //判断是否在点上
+            if (Math.abs(top - x) < 5 || Math.abs(top + height - x) < 5) {
+                //左边竖线
+                if (Math.abs(left - y) < 5) {
+                    //上方
+                    if (Math.abs(top - x) < 5) {
+                        obj.style.cursor = 'se-resize';
+                    } else {
+                        obj.style.cursor = 'ne-resize';
+                    }
+                } else {
+                    if (Math.abs(top - x) < 5) {
+                        obj.style.cursor = 'ne-resize';
+                    } else {
+                        obj.style.cursor = 'se-resize';
+                    }
+                }
+            } else {
+                obj.style.cursor = 'w-resize';
+            }
+        } else if (Math.abs(top - x) < 5 || Math.abs(top + height - x) < 5) {
+            if (Math.abs(left - y) < 5 || Math.abs(left + width - y) < 5) {
+                if (Math.abs(top - x) < 5) {
+                    //上方
+                    if (Math.abs(left - y) < 5) {
+                        obj.style.cursor = 'se-resize';
+                    } else {
+                        obj.style.cursor = 'ne-resize';
+                    }
+                } else {
+                    if (Math.abs(left - y) < 5) {
+                        obj.style.cursor = 'ne-resize';
+                    } else {
+                        obj.style.cursor = 'se-resize';
+                    }
+                }
+            } else {
+                obj.style.cursor = 's-resize';
+            }
+        }
+    }
+
+    over=function(e) {
+        changeWh = true;
+        setCursor(e.srcElement, e.srcElement.style.top.slice(0, -2), e.srcElement.style.left.slice(0, -2), e.clientY, e.clientX);
+    },
+
+    leave=function(e) {
+        changeWh = false;
+        e.srcElement.style.cursor = 'move';
+    },
+    
+    touchHandler=function(event){        
+        var touches=event.changedTouches,
+            touchObj=touches[0],
+            type,
+            simulatedEvent ;
+            
+        switch(event.type){
+            case "touchstart":
+                 type="mousedown";
+                 break;
+            case "touchmove":
+                 type="mousemove";
+                 break;     
+            case "touchend":
+                 type="mouseup";
+                 break;
+            default:
+                 return;
+        
+        }
+        simulatedEvent=document.createEvent("MouseEvent");
+        simulatedEvent.initMouseEventype(type, true, true, window, 1,
+                                        first.screenX,first.screenY,
+                                        first.clientX, first.clientY,
+                                        false,false, false, false, 0, null); 
+        
+        touchObj.target.dispathEvent(simulatedEvent);
+        event.preventDefault();
+    },
+    
+    init = function (option) { 
+        for(prop in option) opts[prop]=option[prop];
+        //alert(opts.container);
+        //初始化事件
+        //如果是移动设备，我们就用事件模拟触发鼠标事件
+        opts.drag_items.addEventListener("touchstart", touchHandler, true);
+        opts.drag_items.addEventListener("touchmove", touchHandler, true);
+        opts.drag_items.addEventListener("touchend", touchHandler, true);
+
+        //监听鼠标事件
+        opts.drag_items.addEventListener("mousedown", start, true);
+        document.addEventListener("mousemove", move, true);
+        document.addEventListener("mouseup", end, true);   
+    };
+    // 暴露公开的成员
+    return {
+        init: init        
+    }
+}());
+
+var DRAP = (function () {
+    var opts = {
+    	drag_items: "",
+    	state: "outer" ,
+    	setContainerStyle: true ,
+    	moveInto: function(){},
+    	moveOut: function(){},
+    	endInto: function(){}
+	},//默认参数,全局的  state:inner outer center 标示拖拽对象是碰触目标触发还是完全进入目标再触发
+    curDrag,
+    change = {},
+    cursorType,
+    startDiffX,
+    startDiffY,
+    //以下为私有方法
+    getPosition=function(elem){
+        if ( !elem ) return {left:0, top:0};  
+        var top = 0, left = 0;  
+        if ( "getBoundingClientRect" in document.documentElement ){  
+            //jquery方法  
+            var box = elem.getBoundingClientRect(),   
+            doc = elem.ownerDocument,   
+            body = doc.body,   
+            docElem = doc.documentElement,  
+            clientTop = docElem.clientTop || body.clientTop || 0,   
+            clientLeft = docElem.clientLeft || body.clientLeft || 0,  
+            top  = box.top  + (self.pageYOffset || docElem && docElem.scrollTop  || body.scrollTop ) - clientTop,  
+            left = box.left + (self.pageXOffset || docElem && docElem.scrollLeft || body.scrollLeft) - clientLeft;  
+        }else{  
+            do{  
+                top += elem.offsetTop || 0;  
+                left += elem.offsetLeft || 0;  
+                elem = elem.offsetParent;  
+            } while (elem);  
+      }  
+        return {left:left, top:top};      
+    },
+    
+    isJoinToBox=function(curDrag){
+        var extendX,
+            extendY,
+            drag_left = parseInt(curDrag.style.left),
+            drag_top = parseInt(curDrag.style.top),
+            box_position = getPosition(opts.drag_items),
+            box_top = box_position.top,
+            box_left = box_position.left,
+            box_bottom = opts.drag_items.offsetHeight + box_top - curDrag.offsetHeight,
+            box_right = opts.drag_items.offsetWidth + box_left;
+            
+        switch(opts.state)
+        {
+            case "outer":
+                extendX = curDrag.offsetWidth;
+                extendY = curDrag.offsetHeight;                           
+                break;
+            case "inner":
+                extendX=0;
+                extendY=0;
+                break;
+            case "center":
+                extendX = parseInt(curDrag.offsetWidth/2);
+                extendY = parseInt(curDrag.offsetHeight/2);
+                break;
+            default:
+                extendX = curDrag.offsetWidth;
+                extendY = curDrag.offsetHeight;
+                        
+        }
+
+        return ((drag_left > box_left && drag_left < (box_right - extendX)) &&
+                (drag_top > box_top && drag_top < box_bottom));
+    },
+    
+    start=function(e){
+        window.getSelection().removeAllRanges();
+        if (e.srcElement.id == opts.drag_items.id) {
+            return false;
+        }
+        cursorType = e.target.style.cursor;
+
+        var oldNode = e.target,
+            top = getPosition(oldNode).top,
+            left = getPosition(oldNode).left,
+            height = oldNode.clientHeight,
+            width = oldNode.clientWidth;
+
+        oldNode.style.cssText = "position:absolute; top:"+top+"px;left:"+left+"px;height:"+height+"px;width:"+width+"px;cursor:"+cursorType;
+        curDrag = oldNode;
+
+        startDiffY = e.pageY - curDrag.offsetTop;
+        startDiffX = e.pageX - curDrag.offsetLeft;
+    },
+    
+    move=function(e){
+        window.getSelection ? window.getSelection().removeAllRanges():document.selection.empty();
+        if(curDrag){
+            if (!isJoinToBox(curDrag) && (!cursorType || cursorType != 'move')) {
+                return false;
+            }
+            switch (cursorType) {
+                case 'se-resize':
+                    if ( e.pageY <= curDrag.offsetTop + 5) {
+                        // console.log('上左斜角')
+                        curDrag.style.height = (curDrag.offsetTop + curDrag.clientHeight - e.pageY) + 'px';
+                        curDrag.style.width = (curDrag.offsetLeft + curDrag.clientWidth - e.pageX) + 'px';
+                        curDrag.style.top = e.pageY + 'px';
+                        curDrag.style.left = e.pageX + 'px';
+                    } else {
+                        // console.log('下左斜角')
+                        curDrag.style.height = (e.pageY - curDrag.offsetTop) + 'px';
+                        curDrag.style.width = (e.pageX - curDrag.offsetLeft) + 'px';
+                    }
+                    break;
+                case 'ne-resize':
+                    if ( e.pageY <= curDrag.offsetTop + 5) {
+                        // console.log('上右斜角')
+                        curDrag.style.height = (curDrag.offsetTop + curDrag.clientHeight - e.pageY) + 'px';
+                        curDrag.style.top = e.pageY + 'px';
+                        curDrag.style.width = (e.pageX - curDrag.offsetLeft) + 'px';
+                    } else {
+                        // console.log('下右斜角')
+                        curDrag.style.width = (curDrag.offsetLeft + curDrag.clientWidth - e.pageX) + 'px';
+                        curDrag.style.left = e.pageX + 'px';
+                        curDrag.style.height = (e.pageY - curDrag.offsetTop) + 'px';
+                    }
+                    break;
+                case 's-resize':
+                    if (e.pageY <= (curDrag.offsetTop + curDrag.clientHeight + 5)) {
+                        var tempset = curDrag.offsetTop;
+                        //上横线
+                        if (Math.abs(tempset - e.pageY) < 5) {
+                            curDrag.style.height = (tempset + curDrag.clientHeight - e.pageY) + 'px';
+                            curDrag.style.top = e.pageY + 'px';
+                        } else { //下横线
+                            curDrag.style.height = (e.pageY - tempset) + 'px';
+                        }
+                    }
+                    break;
+                case 'w-resize':
+                    if (e.pageX <= (curDrag.offsetLeft + curDrag.clientWidth + 5)) {
+                        var tempset = curDrag.offsetLeft;
+                        //左竖线
+                        if (Math.abs(tempset - e.pageX) < 5) {
+                            curDrag.style.width = (tempset + curDrag.clientWidth - e.pageX) + 'px';
+                            curDrag.style.left = e.pageX + 'px';
+                        } else { //右竖线
+                            curDrag.style.width = (e.pageX - tempset) + 'px';
+                        }
+                    }
+                    break;
+                default:
+                    //整块拖动
+                    console.log(startDiffY, startDiffX)
+                    curDrag.style.top = (e.pageY - startDiffY) + "px";
+                    curDrag.style.left = (e.pageX - startDiffX) + "px";
+                    if(opts.setContainerStyle){
+                        if(isJoinToBox(curDrag))
+                        {
+                        	curDrag.style.opacity = 1;
+                            opts.moveInto();
+                        }
+                        else{
+                        	curDrag.style.opacity = 0.5;
+                            opts.moveOut();
+                        }
+                    }
+                    break;
+            }
+
+            //初始化移动之后得元素 使其保留在框内
+            // initCurDrag();
+        }
+    },
+
+    initCurDrag=function() {
+        if (curDrag) {
+            var box_position = getPosition(opts.drag_items);
+            var box_top = box_position.top,
+                box_left = box_position.left,
+                box_bottom = opts.drag_items.offsetHeight + box_top - curDrag.offsetHeight,
+                box_right = opts.drag_items.offsetWidth + box_left;
+            var left = curDrag.offsetLeft,
+                top = curDrag.offsetTop,
+                height = curDrag.height,
+                width = curDrag.width;
+
+            if (box_top > top) {
+                curDrag.style.top = box_top+'px';
+                curDrag.style.height = (height - top + box_top)+'px';
+            }
+
+            if (box_left > left) {
+                curDrag.style.left = box_left+'px';
+                curDrag.style.width = (width - left + box_left)+'px';
+            }
+
+            if (box_right < left + width) {
+                curDrag.style.width = box_right - left +'px';
+            }
+
+            if (box_bottom < top + height) {
+                curDrag.style.width = box_bottom - top +'px';
+            }
+        }
+    },
+    
+    end=function(e){
+        window.getSelection ? window.getSelection().removeAllRanges():document.selection.empty();
+        if(curDrag){
+            if(!isJoinToBox(curDrag) && (!cursorType || cursorType == 'move')){
+            	opts.endInto(curDrag);
+            }
+                
+            if(opts.setContainerStyle){
+                opts.moveOut();
+            }
+            curDrag = null;
+        }
+    },
+    
+    touchHandler=function(event){        
+        var touches=event.changedTouches,
+            touchObj=touches[0],
+            type,
+            simulatedEvent ;
+            
+        switch(event.type){
+            case "touchstart":
+                 type="mousedown";
+                 break;
+            case "touchmove":
+                 type="mousemove";
+                 break;     
+            case "touchend":
+                 type="mouseup";
+                 break;
+            default:
+                 return;
+        
+        }
+        simulatedEvent=document.createEvent("MouseEvent");
+        simulatedEvent.initMouseEventype(type, true, true, window, 1,
+                                        first.screenX,first.screenY,
+                                        first.clientX, first.clientY,
+                                        false,false, false, false, 0, null); 
+        
+        touchObj.target.dispathEvent(simulatedEvent);
+        event.preventDefault();
+    },
+    
+    init = function (option) { 
+        for(prop in option) opts[prop]=option[prop];
+        //初始化事件
+        //如果是移动设备，我们就用事件模拟触发鼠标事件
+        opts.drag_items.addEventListener("touchstart", touchHandler, true);
+        opts.drag_items.addEventListener("touchmove", touchHandler, true);
+        opts.drag_items.addEventListener("touchend", touchHandler, true);
+
+        //监听鼠标事件
+        opts.drag_items.addEventListener("mousedown", start, true);
+        document.addEventListener("mousemove", move, true);
+        document.addEventListener("mouseup", end, true);
+    };
+    // 暴露公开的成员
+    return {
+        init: init        
+    }
+}());
+
+
+
+
+
+</script>
+</head>
+<style type="text/css">
+span{display:block; width:50px; height:50px; background:#dedede; border:1px solid #333; float:left; cursor: move;}
+#container{margin:auto;padding:10px;background:#dedede; width:380px; height:150px; border:5px solid #777; }
+#container li{width:50px; height:50px; border:1px dashed #777; float:left; margin:10px 0 0 10px; list-style-type:none;}
+#dragItems{margin:auto; width:480px;}
+</style>
+<body style="text-align:center;-webkit-user-select:none;">
+将以下小方格拖入上面的容器内：<br />
+注： id="dragItems"下面的子元素设置 drag="true"属性的才可以拖动<br /><br /><br />
+<div id="container">
+
+</div>
+<br />
+<br />
+<br />
+<br />
+<div id="dragItems"><span drag="true">111</span><span drag="true">222</span><span drag="true">333</span><span drag="true">444</span><span drag="true">555</span><span drag="true">666</span><span drag="true">777</span><span drag="true">888</span><span drag="true">999</span></div>
+
+
+</body>
+</html>
+<script type="text/javascript">
+
+//*******************************************************调用部分**************************************************
+
+var c=document.getElementById("container"),//需要拖入的容器id
+    d=document.getElementById("dragItems");//被拖动的元素列表
+DROP.init({
+    container : c,
+    drag_items : d ,
+    state : "inner",//outer inner center
+    moveInto : function(){//当元素被拖入容器内时触发（mousemove时鼠标左键按下状态）
+        
+    },
+    moveOut : function(){//当元素被拖出容器时触发（mousemove时鼠标左键按下状态）
+        
+    },
+    endInto : function(dragEle){//当元素被拖进容器后触发（mouseup 鼠标抬起）
+        c.appendChild(dragEle);
+    }
+});
+
+var f = document.getElementById("container");//需要拖入的容器id
+
+DRAP.init({
+    drag_items : f,
+    state: 'outer',
+    moveInto : function(){//当元素被拖入容器内时触发（mousemove时鼠标左键按下状态）
+        
+    },
+    moveOut : function(){//当元素被拖出容器时触发（mousemove时鼠标左键按下状态）
+        
+    },
+    endInto : function(dragEle){//当元素被拖进容器后触发（mouseup 鼠标抬起）
+        dragEle.remove();
+    }
+});
+
+</script>
